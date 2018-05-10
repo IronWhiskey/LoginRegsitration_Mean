@@ -34,11 +34,11 @@ app.use(session({
 // --- setting up my mongoDB and mongoose ---
 mongoose.connect('mongodb://localhost/MongooseDB')
 var Schema = new mongoose.Schema({
-    first_name: {type: String, required: "first name is required", min: [3, "first name must have 3 characters"]},
-    last_name: {type: String, required: "last name is required", min: [3, "last name must have 3 characters"]},
-    email: {type: String, required: true, unique: [true, "email is taken"], match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, "email not valid"]},
+    first_name: {type: String, required: "first name required!", min: [3, "first name must have 3 characters"]},
+    last_name: {type: String, required: "last name required!", min: [3, "last name must have 3 characters"]},
+    email: {type: String, required: "email required!", unique: [true, "email is taken"], match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, "email not valid"]},
     password: {type: String, required: true, min: [8, "password must have minimum 8 characters"]},
-    birthday: {type: Date, required: true}
+    birthday: {type: Date, required: "birthday required!"}
 }, {timestamps: true})
 var User = mongoose.model('User', Schema);
 
@@ -57,62 +57,61 @@ app.get("/critters/new", function(req, res) {
 })
 
 
-
 // Registers a user 
-app.post('/Register', function(req, res) { 
+app.post('/Register', function(req, res) {
+    var valid = true;               // validation flash flag
+    // ------------ validating password has been entered ------------    
     if (! req.body.password ){
-         req.flash('erroneous', "That password can not be empty!");
-        //  res.redirect('/');
+        req.flash('erroneous', "password required!");
+        valid = false;
     }
-    var d = new Date();
-
-    var today = new Date();
-var dd = today.getDate();
-var mm = today.getMonth()+1; //January is 0!
-var yyyy = today.getFullYear();
-if(dd<10) {
-    dd = '0'+dd
-} 
-
-if(mm<10) {
-    mm = '0'+mm
-} 
-
-today = yyyy + '-' + mm + '-' + dd;
-
-    console.log(today, req.body.bday, "in 68");
-    if ( Date(req.body.bday) < today ){
-        req.flash('erroneous', "That bday can not be empty!");
-       //  res.redirect('/');
-   }       
+    // ------------ validating password confirmation ------------    
     if (req.body.password == req.body.confirm){
-       bcrypt.hash(req.body.password, 10, (err, hash) => {
-            // Store hash password in DB
-            if (err){
-                console.log(err);
-                for(var key in err.errors){
-                    req.flash('erroneous', err.errors[key].message);
-                }
-                res.redirect('/');
-            }
-            else{
-                var user = {first_name: req.body.first_name, last_name: req.body.last_name,
-                    email: req.body.email, password: hash, birthday: req.body.bday};
-                User.create(user, function(err, user){
-                    if(err){
-                        console.log(err);
-                        for(var key in err.errors){
-                            req.flash('erroneous', err.errors[key].message);
-                        }
-                        res.redirect('/');
-                    }
-                    else{
-                        res.redirect('/success');
-                    }
-                })
-            }
-        });
+        req.flash('erroneous', "passwords entries do no match!");
+        valid = false;
     }
+    var today = new Date();
+    var dd = today.getDate();
+    var mm = today.getMonth()+1; //January is 0
+    var yyyy = today.getFullYear();
+    if(dd<10) {
+        dd = '0'+dd
+    } 
+    if(mm<10) {
+        mm = '0'+mm
+    } 
+    today = yyyy + '-' + mm + '-' + dd;
+    // ------------ validating birthday is not in the future ------------
+    if ( Date(req.body.bday) > today ){
+        req.flash('erroneous', "birthday cannot be in the future!");
+        valid = false;
+    }
+    // ------------ validating password vs the hash in the DB plus other validations ------------
+    bcrypt.hash(req.body.password, 10, (err, hash) => {
+        if (err){
+            console.log(err);
+            for(var key in err.errors){
+                req.flash('erroneous', err.errors[key].message);
+            }
+            valid = false;
+        }
+        else{
+            var user = {first_name: req.body.first_name, last_name: req.body.last_name,
+                email: req.body.email, password: hash, birthday: req.body.bday};
+            User.create(user, function(err, user){
+                if(err){
+                    console.log(err);
+                    for(var key in err.errors){
+                        req.flash('erroneous', err.errors[key].message);
+                    }
+                    valid = false;
+                }
+            })
+        }
+    });
+    
+    if(valid){ res.redirect('success'); }
+    else { res.redirect('/'); }
 })
 
 app.get('/success', function(req, res) {
@@ -123,7 +122,7 @@ app.get('/success', function(req, res) {
 app.post("/Login", function(req, res) {
     console.log("inside login", req.body.email);
     if(!req.body.password){
-        req.flash('erroneous', "That password required!");
+        req.flash('erroneous', "password required!");
     }
     User.findOne({email: req.body.email}, function(err, user){
         if (err){
@@ -156,28 +155,3 @@ app.post("/Login", function(req, res) {
 app.listen(8000, function() {
     console.log("listening on port 8000");
 })
-
-
- // User.find({}).exec(
-    //     function(err, user){
-    //     console.log("inside the User.find");
-    //         if(err){
-    //             console.log(err);
-    //             for(var key in err.errors){
-    //                 req.flash('erroneous', err.errors[key].message);
-    //             }
-    //             res.redirect('/');
-    //         }
-    //         else{
-    //             console.log(`inside else statement found: ${user}`);
-    //             if (bcyrpt.compareSync(req.body.password, user.password)){
-    //                 res.render("/success");
-    //             }
-    //             else{
-    //                 console.log('password failed');
-    //                 res.redirect('/');
-    //             }
-    //         // result == true or result == false
-    //         }
-    //     }
-    // )
